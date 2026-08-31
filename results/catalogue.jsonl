@@ -1,0 +1,1 @@
+{"status":"no_gpu_measurement","reason":"CUDA device was unavailable in the initial environment; no timing claim is recorded.","recorded_at":"2026-09-01T00:55:27+08:00","kernel_set":["vector_add","row_softmax","rms_norm","fused_bias_gelu"]}
