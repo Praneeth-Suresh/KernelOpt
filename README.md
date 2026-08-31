@@ -19,9 +19,16 @@ without a GPU.
 | `row_softmax` | online max/sum reduction, one program per row | synchronization and memory traffic |
 | `rms_norm` | fused reduction and normalization | memory bandwidth and launch overhead |
 | `fused_bias_gelu` | fuses elementwise bias and GELU | intermediate traffic and launch overhead |
+| `cnn_depthwise` | channel-last depthwise 3x3 + bias + ReLU fusion | memory traffic and reuse |
+| `diffusion_timestep_embedding` | fuses frequency generation and sin/cos writes | launch overhead |
+| `rotary_embedding` | rotates adjacent feature pairs in one pass | memory bandwidth |
 
 Each kernel's `docs/*.md` note explains the baseline, mapping to GPU execution,
 memory behavior, numerical tradeoffs, and when the optimization is not appropriate.
+
+The extended set targets common model-specific paths: MLP activation fusion for ANNs,
+channel-last depthwise convolution for CNNs, timestep conditioning for diffusion
+U-Nets, and rotary position encoding for Transformers.
 
 ## Quick start
 

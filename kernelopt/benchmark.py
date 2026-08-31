@@ -13,7 +13,15 @@ from pathlib import Path
 
 import torch
 
-from .kernels import fused_bias_gelu, rms_norm, row_softmax, vector_add
+from .kernels import (
+    cnn_depthwise,
+    diffusion_timestep_embedding,
+    fused_bias_gelu,
+    rms_norm,
+    rotary_embedding,
+    row_softmax,
+    vector_add,
+)
 
 
 @dataclass
@@ -59,6 +67,20 @@ def _case(name: str, device: torch.device) -> tuple[tuple[torch.Tensor, ...], ca
         x = torch.randn(4096, 4096, device=device, dtype=dtype)
         args = (x, torch.randn(4096, device=device, dtype=dtype))
         return args, lambda: fused_bias_gelu(*args)
+    if name == "cnn_depthwise":
+        x = torch.randn(2, 64, 64, 32, device=device, dtype=dtype)
+        args = (x, torch.randn(32, 3, 3, device=device, dtype=dtype),
+                torch.randn(32, device=device, dtype=dtype))
+        return args, lambda: cnn_depthwise(*args)
+    if name == "diffusion_timestep_embedding":
+        args = (torch.arange(256, device=device),)
+        return args, lambda: diffusion_timestep_embedding(args[0], 320)
+    if name == "rotary_embedding":
+        x = torch.randn(2, 1024, 16, 64, device=device, dtype=dtype)
+        positions = torch.arange(1024, device=device)[:, None]
+        frequencies = torch.arange(32, device=device)[None, :] / 32
+        args = (x, (positions * frequencies).cos(), (positions * frequencies).sin())
+        return args, lambda: rotary_embedding(*args)
     raise ValueError(f"unknown kernel: {name}")
 
 
@@ -77,11 +99,13 @@ def benchmark(names: list[str], device: str) -> list[Measurement]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--kernel", choices=["all", "vector_add", "row_softmax", "rms_norm", "fused_bias_gelu"], default="all")
+    names = ["vector_add", "row_softmax", "rms_norm", "fused_bias_gelu",
+             "cnn_depthwise", "diffusion_timestep_embedding", "rotary_embedding"]
+    parser.add_argument("--kernel", choices=["all", *names], default="all")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--jsonl", type=Path)
     args = parser.parse_args()
-    names = ["vector_add", "row_softmax", "rms_norm", "fused_bias_gelu"] if args.kernel == "all" else [args.kernel]
+    names = names if args.kernel == "all" else [args.kernel]
     results = benchmark(names, args.device)
     metadata = {"recorded_at": datetime.now(timezone.utc).isoformat(), "python": platform.python_version(),
                 "torch": torch.__version__, "git": _git_revision(), "results": [asdict(item) for item in results]}
