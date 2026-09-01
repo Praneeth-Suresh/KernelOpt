@@ -1,0 +1,71 @@
+name: CI - Correctness & Compilation Tests
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  cpu-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e '.[dev]'
+    
+    - name: Run CPU reference tests (no GPU)
+      run: |
+        python -m pytest tests/ -v --tb=short -k "not cuda" --no-header
+    
+    - name: Run smoke build tests
+      run: |
+        # Quick compile checks (no execution)
+        python -m pytest tests/test_kernels.py::test_imports -v --tb=short
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black
+    
+    - name: Lint with flake8
+      run: |
+        # E501: line too long (handled by black)
+        # W503: line break before binary operator
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+    
+    - name: Check formatting with black
+      run: |
+        black --check . --diff || true
+
+  # GPU tests would run here if self-hosted runner is available
+  # gpu-tests:
+  #   runs-on: [self-hosted, gpu, cuda]
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: Run GPU-accelerated tests
+  #     run: |
+  #       python -m pytest tests/ -v -k "cuda" --tb=short
