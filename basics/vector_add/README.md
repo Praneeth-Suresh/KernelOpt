@@ -292,59 +292,25 @@ printf("Recommended grid size: %d, block size: %d\n", gridSize, blockSize);
 
 ---
 
-## Benchmark Results
+## Measure on your GPU
 
-**Environment**:
-- GPU: NVIDIA A100 40GB
-- Driver: 535.104.05
-- CUDA: 12.2
-- Compiler: nvcc -O3 -std=c++17
+The repository does not publish measured A100 timings or Nsight counters for this example. The [benchmark catalogue](../../results/catalogue.jsonl) records that a CUDA device was unavailable for the initial run. Use the following commands to collect results rather than treating the example launch configuration as evidence of a speedup.
 
-**Vector size**: 100M elements (float32)
+From the repository root, provision the Python test dependencies described in the [root README](../../README.md#start-with-vector-addition). Then, on a CUDA machine:
 
-| Implementation | Time (ms) | Throughput (GB/s) | GElements/s | vs. Naive |
-|---|---|---|---|---|
-| Naive | 485.2 | 988.3 | 206.0 | 1.0× |
-| Optimized (grid-stride) | 247.8 | 1929.8 | 403.0 | 1.96× |
-| Vectorized (float4) | 126.4 | 3791.1 | 791.3 | 3.84× |
-| cuBLAS (cublasSaxpy) | 118.5 | 4055.3 | 844.0 | 4.10× |
-
-**Analysis**:
-- Naive kernel has poor thread occupancy and doesn't fully utilize L1 cache.
-- Grid-stride loop doubles throughput by improving cache locality and reducing launch overhead.
-- Vectorized version approaches cuBLAS performance; differences are likely algorithmic nuances in cuBLAS (e.g., stream optimization, batch processing).
-
----
-
-## Profiling Evidence
-
-### Naive Kernel (sm__utilization.avg = 42%)
-
-```
-Kernel: vector_add_naive
-SM Utilization: 42%
-Warps/SM: 32 / 96 (33% occupancy)
-Memory Throughput: 1.2 TB/s (of 2.0 TB/s peak)
-L1 Hit Rate: 52%
-Achieved GFLOPS: 204.8
-Roofline Analysis: MEMORY-BOUND (low arithmetic intensity)
+```bash
+cd basics/vector_add
+bash reproduce.sh
+cat benchmark_pytorch.json
 ```
 
-**Bottleneck**: Low SM utilization and poor memory coalescing due to scattered access patterns.
+The script builds the example, runs its local tests, and invokes the PyTorch benchmark. Check the log for test failures or skipped steps, and check that the JSON file was created by the current run; the script may finish after warning about a failed GPU step. The JSON is for the PyTorch benchmark and does not by itself compare the CUDA variants. To compare the compiled variants, use the CMake-built executable and record its output along with the exact input size.
 
-### Optimized Kernel (sm__utilization.avg = 87%)
+### What to report
 
-```
-Kernel: vector_add_optimized (grid-stride)
-SM Utilization: 87%
-Warps/SM: 64 / 96 (67% occupancy)
-Memory Throughput: 1.93 TB/s (of 2.0 TB/s peak)
-L1 Hit Rate: 89%
-Achieved GFLOPS: 403.0
-Roofline Analysis: Memory-BOUND, but nearly saturating bandwidth
-```
-
-**Improvement**: Grid-stride loop fills SMs with more work; better cache locality improves L1 hit rate.
+- Compare like-for-like runs on the same hardware, driver, dtype and vector size. Record the build and revision and the timing distribution, not just a single run.
+- For float32 vector addition, a useful effective bandwidth calculation is `12 × N / elapsed_seconds / 10⁹` GB/s: two four-byte inputs are read and one four-byte output is written per element. This is not a direct reading of the hardware memory counters.
+- Run `bash reproduce.sh --profile` if Nsight Compute is installed. Compare achieved memory throughput and eligible warps, and attribute differences only if the counters support them.
 
 ---
 
@@ -405,5 +371,5 @@ Congratulations! You've learned how vector add works and how coalescing impacts 
 - **Matrix-Vector Multiply**: Multi-dimensional access patterns and tiling.
 - **GEMM (Matrix Multiply)**: Peak complexity; combines all techniques.
 
-See [`case_studies/gemm`](../../case_studies/gemm/) for a detailed step-by-step GEMM optimization journey.
+See [`case_studies/gemm` (planned)](../../ROADMAP.md) for a detailed step-by-step GEMM optimization journey.
 
